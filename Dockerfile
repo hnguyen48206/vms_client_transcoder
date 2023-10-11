@@ -11,5 +11,5 @@ RUN npm install
 # RUN npm ci --omit=dev
 # Bundle app source
 COPY . .
-EXPOSE 8082
+EXPOSE 1111
 CMD [ "npm", "run", "start" ]
