@@ -266,7 +266,7 @@ app.get('/remove_mjpeg/:name', (req, res) => {
     if (idx != null) {
         if (global.mjpeg_bufferList[idx].internalProcess != null)
             killProcess(global.mjpeg_bufferList[idx].internalProcess.pid)
-        delete global.bufferList[idx];
+        delete global.mjpeg_bufferList[idx];
     }
     res.status(200).send('Stream is removed');
 });
