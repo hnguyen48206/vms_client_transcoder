@@ -1,0 +1,50 @@
+<h1 id="textTitle"></h1>
+<img style="width:50vw;height:auto" id="img">
+<br>
+<button style="width:20%; height:20%; font-size: 2em;" id="stopBtn" onclick="stop()">Stop</button>
+<button style="width:20%; height:20%; font-size: 2em" id="restartBtn" onclick="restart()">Start/Restart</button>
+
+<script src="socketio.js"></script>
+<script>
+	let streamTest = {
+		streamID: 'videoTest',
+		streamURL: 'http://10.70.123.62/streams/62384f657207160013116a54/stream/62384f657207160013116a54.m3u8'
+	}
+	document.getElementById('textTitle').innerHTML = streamTest.streamURL
+	var img = document.getElementById('img');
+	socket = io('http://127.0.0.1:6147');
+
+	socket.on("connection", function (socket) {
+		console.log("Made socket connection");
+	});
+
+	socket.emit("test-event", JSON.stringify(streamTest), (response) => {
+	});
+	socket.on("test-event-reply", function (data) {
+		console.log(data);
+	});
+
+	socket.on('onStream_' + streamTest.streamID, function (data) {
+		img.src = 'data:image/jpeg;base64,' + data;
+	});
+
+	socket.on('onStreamInfo_' + streamTest.streamID, function (data) {
+		console.log(data)
+	});
+
+	function restart() {
+		stop();
+		socket.emit("streamInfo", JSON.stringify(streamTest), (response) => {
+		});
+		socket.emit("startNewStream", JSON.stringify(streamTest), (response) => {
+		});
+	}
+	function stop() {
+		socket.emit("stopStream", JSON.stringify({
+			isAllStream: true,
+			streamID: streamTest.streamID
+		}), (response) => {
+		});
+	}
+
+</script>
