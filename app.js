@@ -115,18 +115,23 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                         let wholeFrame = buff.slice(startIndex, endIndex)
                         //full frame recieved
                         let isStreamFound = false
-                        if (existingStreamId != null) {
-                            global.mjpeg_bufferList[existingStreamId].frame = wholeFrame;
-                            global.mjpeg_bufferList[existingStreamId].informer.emit('new_frame');
-                            // fs.writeFile('image.jpeg', wholeFrame,()=>{});
-                            isStreamFound = true;
+                        try {
+                            if (existingStreamId != null) {
+                                global.mjpeg_bufferList[existingStreamId].frame = wholeFrame;
+                                global.mjpeg_bufferList[existingStreamId].informer.emit('new_frame');
+                                // fs.writeFile('image.jpeg', wholeFrame,()=>{});
+                                isStreamFound = true;
+                            }
+                            else if (latestStreamID != null) {
+                                global.mjpeg_bufferList[latestStreamID].frame = wholeFrame;
+                                global.mjpeg_bufferList[latestStreamID].informer.emit('new_frame');
+                                // fs.writeFile('image.jpeg', wholeFrame,()=>{});
+                                isStreamFound = true;
+                            }
+                        } catch (error) {
+                            console.log(error)
                         }
-                        else if (latestStreamID != null) {
-                            global.mjpeg_bufferList[latestStreamID].frame = wholeFrame;
-                            global.mjpeg_bufferList[latestStreamID].informer.emit('new_frame');
-                            // fs.writeFile('image.jpeg', wholeFrame,()=>{});
-                            isStreamFound = true;
-                        }
+
                         // console.log('on full frame')
                         if (!isStreamFound)
                             res.status(500).send('No stream found');
