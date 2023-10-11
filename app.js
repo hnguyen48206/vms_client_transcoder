@@ -144,11 +144,11 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
             });
             req.on('close', function () {
                 console.log('FFMPEG closed')
-                if (existingStreamId != null) {
+                if (existingStreamId != null && global.mjpeg_bufferList[existingStreamId]!=null) {
                     global.mjpeg_bufferList[existingStreamId].informer.emit('src_close');
                     delete global.mjpeg_bufferList[existingStreamId]
                 }
-                else if (latestStreamID != null) {
+                else if (latestStreamID != null && global.mjpeg_bufferList[latestStreamID]!=null) {
                     global.mjpeg_bufferList[latestStreamID].informer.emit('src_close');
                     delete global.mjpeg_bufferList[latestStreamID]
                 }
