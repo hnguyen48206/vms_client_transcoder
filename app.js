@@ -65,17 +65,19 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
         let parts = req.originalUrl.split('@@@')
         let input = parts[1]
         let file = req.params.name;
-
+        console.log('Send stream with ID ', file)
         //check to see if this ccid has already been existing
         let existingStreamId = null;
         for (let i = 0; i < global.mjpeg_bufferList.length > 0; ++i) {
-            if (global.mjpeg_bufferList[i] == file) {
+            if (global.mjpeg_bufferList[i] != null && global.mjpeg_bufferList[i].id == file) {
                 existingStreamId = i; break;
             }
         }
 
         let latestStreamID = null;
+        console.log(existingStreamId)
         if (existingStreamId == null) {
+            console.log('Brand-new StreamID')
             global.mjpeg_bufferList.push(
                 {
                     id: file,
@@ -86,14 +88,14 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
             )
             latestStreamID = global.mjpeg_bufferList.length - 1;
         }
-        else
-        {
-            killProcess(global.mjpeg_bufferList[existingStreamId].internalProcess.pid)
-            global.mjpeg_bufferList[existingStreamId].frame == null
+        else {
+            console.log('Existing StreamID')
+            global.mjpeg_bufferList[existingStreamId].frame == null;
         }
         ////////////////////////////////////////////////////////////////////////////////////////////////////
         if (input.toString() == 0) {
             //run ffmpeg from outside
+            console.log('Start from the external transcoder')
             let buff = Buffer.alloc(0)
             let magicNumber = Buffer.from("FFD8FF", "hex")
             req.on('data', (data) => {
@@ -135,11 +137,10 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                     }
                 }
             });
-
             req.on('close', function () {
                 console.log('FFMPEG closed')
                 if (existingStreamId != null) {
-                    global.mjpeg_bufferList[existingStreamId].informer.emit('new_frame');
+                    global.mjpeg_bufferList[existingStreamId].informer.emit('src_close');
                     delete global.mjpeg_bufferList[existingStreamId]
                 }
                 else if (latestStreamID != null) {
@@ -153,6 +154,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
             //run ffmpeg internally
             try {
                 // check resources first
+                console.log('Start from the internal transcoder')
                 getCurrentSystemResourcesInfo().then(re => {
                     console.log(re)
                     if (re == null || (re != null && re.cpu <= 90 && re.mem <= 90)) {
@@ -167,10 +169,18 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                         ffmpeg.stderr.on('data', (data) => {
                             // console.error(`stderr: ${data}`);
                         });
-                        if (existingStreamId != null)
+                        if (existingStreamId != null) {
+                            if(global.mjpeg_bufferList[existingStreamId].internalProcess!=null)
+                            killProcess(global.mjpeg_bufferList[existingStreamId].internalProcess.pid);
                             global.mjpeg_bufferList[existingStreamId].internalProcess = ffmpeg;
-                        else if (latestStreamID != null)
+                            // console.log(global.mjpeg_bufferList[existingStreamId].internalProcess)
+                        }
+                        else if (latestStreamID != null) {
+                            if(global.mjpeg_bufferList[latestStreamID].internalProcess!=null)
+                            killProcess(global.mjpeg_bufferList[latestStreamID].internalProcess.pid);
                             global.mjpeg_bufferList[latestStreamID].internalProcess = ffmpeg;
+                            // console.log(global.mjpeg_bufferList[latestStreamID].internalProcess)
+                        }
 
                         setTimeout(() => {
                             if (isSucceeded)
@@ -200,16 +210,17 @@ app.get('/get_mjpeg/:name', (req, res) => {
     console.log('file id: ', file)
 
     global.mjpeg_bufferList.forEach(buffer => {
-        console.log('global list: ', buffer.id)
-        console.log('file id: ', file)
-
         if (file === buffer.id)
             stream = buffer
     })
 
-    console.log(stream)
     if (stream != null) {
         try {
+            if (stream.internalProcess != null)
+                console.log('Found stream with internal process')
+            else
+                console.log('Found stream with no internal process')
+
             res.set({
                 'Content-Type': 'multipart/x-mixed-replace; boundary=myboundary',
                 'Cache-Control': 'no-cache'
@@ -227,7 +238,11 @@ app.get('/get_mjpeg/:name', (req, res) => {
             });
             stream.informer.on('src_close', data => {
                 console.log('src closed')
-                res.status(500).send('Stream Source has been closed');
+                try {
+                    res.status(500).send('Stream Source has been closed');
+                } catch (error) {
+                    console.log(error)
+                }
             });
         } catch (error) {
             console.log(error)
@@ -248,8 +263,11 @@ app.get('/remove_mjpeg/:name', (req, res) => {
             idx = i; break;
         }
     }
-    if (idx != null)
+    if (idx != null) {
+        if (global.mjpeg_bufferList[idx].internalProcess != null)
+            killProcess(global.mjpeg_bufferList[idx].internalProcess.pid)
         delete global.bufferList[idx];
+    }
     res.status(200).send('Stream is removed');
 });
 
