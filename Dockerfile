@@ -1,4 +1,5 @@
 FROM node:14-alpine
+RUN apk add  --no-cache ffmpeg
 # Create app directory
 WORKDIR /usr/src/app
 # Install app dependencies
