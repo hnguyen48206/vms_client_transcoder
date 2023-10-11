@@ -34,10 +34,10 @@ if (global.mjpeg_bufferList == null) {
 }
 
 const path = require('path');
-// if (currentOS === 'win32')
-//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
-// else if (currentOS === 'linux')
-//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
+if (currentOS === 'win32')
+    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
+else if (currentOS === 'linux')
+    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
 
 console.log(pathToFfmpeg)
 console.log(process.cwd())
