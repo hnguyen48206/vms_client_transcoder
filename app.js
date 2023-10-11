@@ -264,7 +264,7 @@ app.get('/remove_mjpeg/:name', (req, res) => {
     let file = req.params.name;
     let idx = null
     for (let i = 0; i < global.mjpeg_bufferList.length; ++i) {
-        if (global.mjpeg_bufferList[i].id === file) {
+        if (global.mjpeg_bufferList[i]!=null && global.mjpeg_bufferList[i].id === file) {
             idx = i; break;
         }
     }
