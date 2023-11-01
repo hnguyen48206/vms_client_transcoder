@@ -34,15 +34,15 @@ if (global.mjpeg_bufferList == null) {
 }
 
 const path = require('path');
-if (currentOS === 'win32')
-    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
-else if (currentOS === 'linux')
-    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
+// if (currentOS === 'win32')
+//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
+// else if (currentOS === 'linux')
+//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
 
 console.log(pathToFfmpeg)
 console.log(process.cwd())
 
-const isRTSP = '-rtsp_transport tcp'
+const isRTSP = '-rtsp_transport tcp '
 const io = require('socket.io')(server, {
     allowRequest: (req, callback) => {
         const origin = req.headers.origin
@@ -117,14 +117,14 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                         let isStreamFound = false
                         try {
                             if (existingStreamId != null) {
-                                global.mjpeg_bufferList[existingStreamId].frame = wholeFrame;
-                                global.mjpeg_bufferList[existingStreamId].informer.emit('new_frame');
+                                global.mjpeg_bufferList[existingStreamId].frame = wholeFrame;                                
+                                global.mjpeg_bufferList[existingStreamId].informer.emit('new_frame', wholeFrame);
                                 // fs.writeFile('image.jpeg', wholeFrame,()=>{});
                                 isStreamFound = true;
                             }
                             else if (latestStreamID != null) {
                                 global.mjpeg_bufferList[latestStreamID].frame = wholeFrame;
-                                global.mjpeg_bufferList[latestStreamID].informer.emit('new_frame');
+                                global.mjpeg_bufferList[latestStreamID].informer.emit('new_frame', wholeFrame);
                                 // fs.writeFile('image.jpeg', wholeFrame,()=>{});
                                 isStreamFound = true;
                             }
@@ -141,14 +141,16 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                         if (startIndex > 0) console.error(`Discarded ${startIndex} bytes of invalid data`)
                     }
                 }
+
+
             });
             req.on('close', function () {
                 console.log('FFMPEG closed')
-                if (existingStreamId != null && global.mjpeg_bufferList[existingStreamId]!=null) {
+                if (existingStreamId != null && global.mjpeg_bufferList[existingStreamId] != null) {
                     global.mjpeg_bufferList[existingStreamId].informer.emit('src_close');
                     delete global.mjpeg_bufferList[existingStreamId]
                 }
-                else if (latestStreamID != null && global.mjpeg_bufferList[latestStreamID]!=null) {
+                else if (latestStreamID != null && global.mjpeg_bufferList[latestStreamID] != null) {
                     global.mjpeg_bufferList[latestStreamID].informer.emit('src_close');
                     delete global.mjpeg_bufferList[latestStreamID]
                 }
@@ -163,26 +165,29 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                 getCurrentSystemResourcesInfo().then(re => {
                     console.log(re)
                     if (re == null || (re != null && re.cpu <= 90 && re.mem <= 90)) {
-                        let command = `-fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''} -i ${input} -c:v mjpeg -an -f mjpeg http://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
+                        let command = `-fflags nobuffer -flags low_delay -r 20 ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg http://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
                         console.log(command)
                         let ffmpeg = spawn(pathToFfmpeg, command.split(' '), { windowsHide: true });
                         let isSucceeded = true;
+                        // ffmpeg.stdout.on('data', function (data) {
+                        //     console.log(data)
+                        // });
                         ffmpeg.on('close', function (code) {
-                            console.log(code)
+                            console.log('Trans Process Ended ',code)
                             isSucceeded = false;
                         });
                         ffmpeg.stderr.on('data', (data) => {
-                            // console.error(`stderr: ${data}`);
+                            console.error(`stderr: ${data}`);
                         });
                         if (existingStreamId != null) {
-                            if(global.mjpeg_bufferList[existingStreamId].internalProcess!=null)
-                            killProcess(global.mjpeg_bufferList[existingStreamId].internalProcess.pid);
+                            if (global.mjpeg_bufferList[existingStreamId].internalProcess != null)
+                                killProcess(global.mjpeg_bufferList[existingStreamId].internalProcess.pid);
                             global.mjpeg_bufferList[existingStreamId].internalProcess = ffmpeg;
                             // console.log(global.mjpeg_bufferList[existingStreamId].internalProcess)
                         }
                         else if (latestStreamID != null) {
-                            if(global.mjpeg_bufferList[latestStreamID].internalProcess!=null)
-                            killProcess(global.mjpeg_bufferList[latestStreamID].internalProcess.pid);
+                            if (global.mjpeg_bufferList[latestStreamID].internalProcess != null)
+                                killProcess(global.mjpeg_bufferList[latestStreamID].internalProcess.pid);
                             global.mjpeg_bufferList[latestStreamID].internalProcess = ffmpeg;
                             // console.log(global.mjpeg_bufferList[latestStreamID].internalProcess)
                         }
@@ -229,17 +234,18 @@ app.get('/get_mjpeg/:name', (req, res) => {
             res.set({
                 'Content-Type': 'multipart/x-mixed-replace; boundary=myboundary',
                 'Cache-Control': 'no-cache'
-            });
+            }); 
             stream.informer.on('new_frame', data => {
-                if (stream.frame != null) {
-                    res.write("Content-Type: image/jpeg\r\n");
-                    res.write("--myboundary\r\n");
-                    res.write("Content-Length: " + stream.frame.length + "\r\n");
-                    res.write("\r\n");
-                    res.write(stream.frame, 'binary');
-                    res.write("\r\n");
-                }
-
+                setTimeout(() => {
+                    if (data != null) {
+                        res.write("Content-Type: image/jpeg\r\n");
+                        res.write("--myboundary\r\n");
+                        res.write("Content-Length: " + data.length + "\r\n");
+                        res.write("\r\n");
+                        res.write(data, 'binary');
+                        res.write("\r\n");
+                    }
+                }, 0);
             });
             stream.informer.on('src_close', data => {
                 console.log('src closed')
@@ -264,7 +270,7 @@ app.get('/remove_mjpeg/:name', (req, res) => {
     let file = req.params.name;
     let idx = null
     for (let i = 0; i < global.mjpeg_bufferList.length; ++i) {
-        if (global.mjpeg_bufferList[i]!=null && global.mjpeg_bufferList[i].id === file) {
+        if (global.mjpeg_bufferList[i] != null && global.mjpeg_bufferList[i].id === file) {
             idx = i; break;
         }
     }
