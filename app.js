@@ -165,7 +165,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                 getCurrentSystemResourcesInfo().then(re => {
                     console.log(re)
                     if (re == null || (re != null && re.cpu <= 90 && re.mem <= 90)) {
-                        let command = `-fflags nobuffer -flags low_delay -r 20 ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg http://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
+                        let command = `-probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay -r 20 ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg http://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
                         console.log(command)
                         let ffmpeg = spawn(pathToFfmpeg, command.split(' '), { windowsHide: true });
                         let isSucceeded = true;
