@@ -18,7 +18,8 @@ const fs = require('fs');
 const EventEmitter = require('eventemitter3');
 var stream_ = require('stream');
 const { Blob } = require("buffer");
-
+const moment = require('moment');
+const reel = require('node-reel')
 var isFirstFrame = false
 const APP_PORT = '1111'
 //webm buffer saved
@@ -57,8 +58,33 @@ const io = require('socket.io')(server, {
         callback(null, origins.includes(origin))
     }
 });
-server.listen(APP_PORT);
-
+server.listen(APP_PORT, "localhost", function (error) {
+    if (error) {
+        console.error("Unable to listen on port", APP_PORT, error);
+        return;
+    }
+    else {
+        console.log('Server is listening on port', APP_PORT)
+        //cron job to periodically check no-used streams and remove them to release resources.
+        reel().call(() => {
+            // console.log('cron run')
+            for (let i = 0; i < global.mjpeg_bufferList.length > 0; ++i) {
+                if (global.mjpeg_bufferList[i]!=null && global.mjpeg_bufferList[i].numberOfClient == 0) {
+                    if (!doesNoClientUseStream(global.mjpeg_bufferList[i].streamLastUsedTime)) {
+                        try {
+                            console.log('Stream ' + global.mjpeg_bufferList[i].id + ' will be removed since no client is using it.')
+                            if (global.mjpeg_bufferList[i].internalProcess != null)
+                                killProcess(global.mjpeg_bufferList[i].internalProcess.pid)
+                            delete global.mjpeg_bufferList[i];
+                        } catch (error) {
+                            console.log(error)
+                        }
+                    }
+                }
+            }
+        }).everyMinute().run()
+    }
+})
 //push ffmpeg mjpeg to httpserver
 app.post('/send_mjpeg/:name/@@@*', function (req, res) {
     try {
@@ -83,7 +109,9 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                     id: file,
                     informer: new EventEmitter(),
                     frame: null,
-                    internalProcess: null
+                    internalProcess: null,
+                    streamLastUsedTime: moment(),
+                    numberOfClient: 0
                 }
             )
             latestStreamID = global.mjpeg_bufferList.length - 1;
@@ -91,6 +119,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
         else {
             console.log('Existing StreamID')
             global.mjpeg_bufferList[existingStreamId].frame == null;
+            global.mjpeg_bufferList[existingStreamId].streamLastUsedTime = moment();
         }
         ////////////////////////////////////////////////////////////////////////////////////////////////////
         if (input.toString() == 0) {
@@ -117,7 +146,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                         let isStreamFound = false
                         try {
                             if (existingStreamId != null) {
-                                global.mjpeg_bufferList[existingStreamId].frame = wholeFrame;                                
+                                global.mjpeg_bufferList[existingStreamId].frame = wholeFrame;
                                 global.mjpeg_bufferList[existingStreamId].informer.emit('new_frame', wholeFrame);
                                 // fs.writeFile('image.jpeg', wholeFrame,()=>{});
                                 isStreamFound = true;
@@ -165,7 +194,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                 getCurrentSystemResourcesInfo().then(re => {
                     console.log(re)
                     if (re == null || (re != null && re.cpu <= 90 && re.mem <= 90)) {
-                        let command = `-probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay -r 20 ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg http://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
+                        let command = `-probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg http://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
                         console.log(command)
                         let ffmpeg = spawn(pathToFfmpeg, command.split(' '), { windowsHide: true });
                         let isSucceeded = true;
@@ -173,11 +202,11 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                         //     console.log(data)
                         // });
                         ffmpeg.on('close', function (code) {
-                            console.log('Trans Process Ended ',code)
+                            console.log('Trans Process Ended ', code)
                             isSucceeded = false;
                         });
                         ffmpeg.stderr.on('data', (data) => {
-                            console.error(`stderr: ${data}`);
+                            // console.error(`stderr: ${data}`);
                         });
                         if (existingStreamId != null) {
                             if (global.mjpeg_bufferList[existingStreamId].internalProcess != null)
@@ -220,8 +249,11 @@ app.get('/get_mjpeg/:name', (req, res) => {
     console.log('file id: ', file)
 
     global.mjpeg_bufferList.forEach(buffer => {
-        if (file === buffer.id)
-            stream = buffer
+        if (file === buffer.id) {
+            buffer.streamLastUsedTime = moment();
+            buffer.numberOfClient++;
+            stream = buffer;
+        }
     })
 
     if (stream != null) {
@@ -234,7 +266,7 @@ app.get('/get_mjpeg/:name', (req, res) => {
             res.set({
                 'Content-Type': 'multipart/x-mixed-replace; boundary=myboundary',
                 'Cache-Control': 'no-cache'
-            }); 
+            });
             stream.informer.on('new_frame', data => {
                 setTimeout(() => {
                     if (data != null) {
@@ -263,6 +295,11 @@ app.get('/get_mjpeg/:name', (req, res) => {
         res.status(500).send('No stream found');
     req.on('close', function () {
         console.log('client disconnected')
+        global.mjpeg_bufferList.forEach(buffer => {
+            if (file === buffer.id) {
+                buffer.numberOfClient--;
+            }
+        })
     });
 });
 //remove mjpeg stream from server
@@ -281,6 +318,9 @@ app.get('/remove_mjpeg/:name', (req, res) => {
     }
     res.status(200).send('Stream is removed');
 });
+
+
+
 
 //push ffmpeg webm to httpserver
 app.post('/send_webm/:name', function (req, res) {
@@ -368,7 +408,6 @@ app.get('/remove_webm/:name', (req, res) => {
         delete global.bufferList[idx];
     res.status(200).send('Stream is removed');
 });
-
 //send and get webm stream internally
 app.get('/webm_stream/:id/@@@*', function (req, res) {
 
@@ -431,7 +470,6 @@ app.get('/webm_stream/:id/@@@*', function (req, res) {
 
 
 });
-
 app.get('/ivmsstream/closeall', function (req, res) {
     global.streamList.forEach(stream => {
         killProcess(stream.stream.pid);
@@ -890,3 +928,14 @@ async function getCurrentSystemResourcesInfo() {
         return null
     }
 }
+
+function doesNoClientUseStream(streamLastUsedTime) {
+    //check if 15 minutues has passed and no client is using the stream, then remove it
+    let currentTime = moment();
+    streamLastUsedTime = streamLastUsedTime.add(15, 'minutes');
+    console.log(currentTime, streamLastUsedTime)
+    let res = streamLastUsedTime.isBefore(currentTime);
+    console.log('Stream has not passed ' + res)
+    return res
+}
+
