@@ -4,17 +4,26 @@ const kill = require('terminate');
 const spawn = require('child_process').spawn;
 const app = require('express')();
 const cors = require('cors');
+const bodyParser = require('body-parser');
+const fs = require('fs');
+
+
+const key = fs.readFileSync('./httpsKeys/localhost.decrypted.key');
+const cert = fs.readFileSync('./httpsKeys/localhost.crt');
+
 app.use(cors());
 app.options('*', cors());
-const server = require('http').Server(app);
-var bodyParser = require('body-parser');
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+// const server = require('http').Server(app);
+const server = require('https').createServer({ key, cert }, app);
+
+
+
 const si = require('systeminformation');
 var pathToFfmpeg = 'ffmpeg'
 const OS = require('os');
 const currentOS = OS.platform();
-const fs = require('fs');
 const EventEmitter = require('eventemitter3');
 var stream_ = require('stream');
 const { Blob } = require("buffer");
@@ -22,6 +31,7 @@ const moment = require('moment');
 const reel = require('node-reel')
 var isFirstFrame = false
 const APP_PORT = '1111'
+
 //webm buffer saved
 if (global.streamList == null &&
     global.bufferList == null) {
@@ -35,10 +45,10 @@ if (global.mjpeg_bufferList == null) {
 }
 
 const path = require('path');
-// if (currentOS === 'win32')
-//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
-// else if (currentOS === 'linux')
-//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
+if (currentOS === 'win32')
+    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
+else if (currentOS === 'linux')
+    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
 
 console.log(pathToFfmpeg)
 console.log(process.cwd())
@@ -69,7 +79,7 @@ server.listen(APP_PORT, "localhost", function (error) {
         reel().call(() => {
             // console.log('cron run')
             for (let i = 0; i < global.mjpeg_bufferList.length > 0; ++i) {
-                if (global.mjpeg_bufferList[i]!=null && global.mjpeg_bufferList[i].numberOfClient == 0) {
+                if (global.mjpeg_bufferList[i] != null && global.mjpeg_bufferList[i].numberOfClient == 0) {
                     if (!doesNoClientUseStream(global.mjpeg_bufferList[i].streamLastUsedTime)) {
                         try {
                             console.log('Stream ' + global.mjpeg_bufferList[i].id + ' will be removed since no client is using it.')
@@ -194,7 +204,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                 getCurrentSystemResourcesInfo().then(re => {
                     console.log(re)
                     if (re == null || (re != null && re.cpu <= 90 && re.mem <= 90)) {
-                        let command = `-probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg http://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
+                        let command = `-probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg https://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
                         console.log(command)
                         let ffmpeg = spawn(pathToFfmpeg, command.split(' '), { windowsHide: true });
                         let isSucceeded = true;
@@ -206,7 +216,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                             isSucceeded = false;
                         });
                         ffmpeg.stderr.on('data', (data) => {
-                            // console.error(`stderr: ${data}`);
+                            console.error(`stderr: ${data}`);
                         });
                         if (existingStreamId != null) {
                             if (global.mjpeg_bufferList[existingStreamId].internalProcess != null)
@@ -318,10 +328,6 @@ app.get('/remove_mjpeg/:name', (req, res) => {
     }
     res.status(200).send('Stream is removed');
 });
-
-
-
-
 //push ffmpeg webm to httpserver
 app.post('/send_webm/:name', function (req, res) {
     try {
