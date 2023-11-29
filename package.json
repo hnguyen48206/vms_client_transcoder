@@ -6,7 +6,8 @@
   "bin": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon app.js"
+    "start": "nodemon app.js",
+    "build": "pkg --compress GZip ."
   },
   "author": "",
   "license": "ISC",
@@ -27,7 +28,8 @@
     "terminate": "^2.5.0"
   },
   "pkg": {
-    "assets": [],
+    "assets": [
+    ],
     "outputPath": "build"
   },
   "devDependencies": {

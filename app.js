@@ -6,19 +6,17 @@ const app = require('express')();
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs');
-
-
-const key = fs.readFileSync('./httpsKeys/localhost.decrypted.key');
-const cert = fs.readFileSync('./httpsKeys/localhost.crt');
+const path = require('path');
 
 app.use(cors());
 app.options('*', cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
-// const server = require('http').Server(app);
-const server = require('https').createServer({ key, cert }, app);
+const server = require('http').Server(app);
 
-
+// const key = fs.readFileSync(path.join(process.cwd(), 'localhost.decrypted.key'));
+// const cert = fs.readFileSync(path.join(process.cwd(), 'localhost.crt'));
+// const server = require('https').createServer({ key, cert }, app);
 
 const si = require('systeminformation');
 var pathToFfmpeg = 'ffmpeg'
@@ -44,11 +42,10 @@ if (global.mjpeg_bufferList == null) {
     global.mjpeg_bufferList = [];
 }
 
-const path = require('path');
-if (currentOS === 'win32')
-    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
-else if (currentOS === 'linux')
-    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
+// if (currentOS === 'win32')
+//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
+// else if (currentOS === 'linux')
+//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
 
 console.log(pathToFfmpeg)
 console.log(process.cwd())
@@ -204,7 +201,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                 getCurrentSystemResourcesInfo().then(re => {
                     console.log(re)
                     if (re == null || (re != null && re.cpu <= 90 && re.mem <= 90)) {
-                        let command = `-probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg https://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
+                        let command = `-probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg http://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
                         console.log(command)
                         let ffmpeg = spawn(pathToFfmpeg, command.split(' '), { windowsHide: true });
                         let isSucceeded = true;
@@ -216,7 +213,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
                             isSucceeded = false;
                         });
                         ffmpeg.stderr.on('data', (data) => {
-                            console.error(`stderr: ${data}`);
+                            // console.error(`stderr: ${data}`);
                         });
                         if (existingStreamId != null) {
                             if (global.mjpeg_bufferList[existingStreamId].internalProcess != null)
@@ -512,7 +509,6 @@ app.get("/webm/:id", function (req, res) {
     }
 
 });
-
 
 function serverStatusHandler(request, response, next) {
     const headers = {
