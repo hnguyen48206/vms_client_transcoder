@@ -7,9 +7,9 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
-
-app.use(cors());
-app.options('*', cors());
+app.use(cors({
+    origin: '*'
+}));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 const server = require('http').Server(app);
