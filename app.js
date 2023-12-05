@@ -7,11 +7,16 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
-app.use(cors({
-    origin: '*'
-}));
+// app.use(cors({
+//     origin: '*'
+// }));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+app.use(function (req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+})
 const server = require('http').Server(app);
 
 // const key = fs.readFileSync(path.join(process.cwd(), 'localhost.decrypted.key'));
@@ -93,7 +98,7 @@ server.listen(APP_PORT, "localhost", function (error) {
     }
 })
 //push ffmpeg mjpeg to httpserver
-app.post('/send_mjpeg/:name/@@@*', function (req, res) {
+app.post('/send_mjpeg/:name/@@@*', cors(), function (req, res) {
     try {
         let parts = req.originalUrl.split('@@@')
         let input = parts[1]
@@ -250,7 +255,7 @@ app.post('/send_mjpeg/:name/@@@*', function (req, res) {
     }
 });
 //get ffmpeg mjpeg from httpserver
-app.get('/get_mjpeg/:name', (req, res) => {
+app.get('/get_mjpeg/:name', cors(), (req, res) => {
     let file = req.params.name;
     let stream = null
     console.log('file id: ', file)
@@ -310,7 +315,7 @@ app.get('/get_mjpeg/:name', (req, res) => {
     });
 });
 //remove mjpeg stream from server
-app.get('/remove_mjpeg/:name', (req, res) => {
+app.get('/remove_mjpeg/:name', cors(),(req, res) => {
     let file = req.params.name;
     let idx = null
     for (let i = 0; i < global.mjpeg_bufferList.length; ++i) {
