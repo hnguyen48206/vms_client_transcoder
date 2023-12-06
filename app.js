@@ -123,14 +123,14 @@ app.post('/send_mjpeg/:name/@@@*', cors(), function (req, res) {
                     frame: null,
                     internalProcess: null,
                     streamLastUsedTime: moment(),
-                    numberOfClient: 0
+                    numberOfClient: 0,
                 }
             )
             latestStreamID = global.mjpeg_bufferList.length - 1;
         }
         else {
             console.log('Existing StreamID')
-            global.mjpeg_bufferList[existingStreamId].frame == null;
+            global.mjpeg_bufferList[existingStreamId].frame = null;
             global.mjpeg_bufferList[existingStreamId].streamLastUsedTime = moment();
         }
         ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,9 +203,17 @@ app.post('/send_mjpeg/:name/@@@*', cors(), function (req, res) {
             try {
                 // check resources first
                 console.log('Start from the internal transcoder')
+
                 getCurrentSystemResourcesInfo().then(re => {
                     console.log(re)
                     if (re == null || (re != null && re.cpu <= 90 && re.mem <= 90)) {
+
+                        console.log(input)
+                        if(latestStreamID!=null)
+                        global.mjpeg_bufferList[latestStreamID].input=input
+                        else
+                        global.mjpeg_bufferList[latestStreamID].input=input
+
                         let command = `-probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v mjpeg -q:v 31 -an -f mjpeg http://localhost:${APP_PORT}/send_mjpeg/${file}/@@@0`
                         console.log(command)
                         let ffmpeg = spawn(pathToFfmpeg, command.split(' '), { windowsHide: true });
@@ -315,7 +323,7 @@ app.get('/get_mjpeg/:name', cors(), (req, res) => {
     });
 });
 //remove mjpeg stream from server
-app.get('/remove_mjpeg/:name', cors(),(req, res) => {
+app.get('/remove_mjpeg/:name', cors(), (req, res) => {
     let file = req.params.name;
     let idx = null
     for (let i = 0; i < global.mjpeg_bufferList.length; ++i) {
@@ -330,7 +338,28 @@ app.get('/remove_mjpeg/:name', cors(),(req, res) => {
     }
     res.status(200).send('Stream is removed');
 });
+app.get('/get_mjpeg_all', cors(), (req, res) => {
+    let result = []
+    for (let i = 0; i < global.mjpeg_bufferList.length; ++i) {
+        result.push({
+            id: global.mjpeg_bufferList[i].id,
+            input: global.mjpeg_bufferList[i].input,
+            numberOfClient: global.mjpeg_bufferList[i].numberOfClient
+        })
+    }
+    res.status(200).send(result);
+});
+app.get('/remove_mjpeg_all', cors(), (req, res) => {
+    for (let i = 0; i < global.mjpeg_bufferList.length; ++i) {
+        if (global.mjpeg_bufferList[i].internalProcess != null)
+            killProcess(global.mjpeg_bufferList[i].internalProcess.pid)
+    }
+    global.mjpeg_bufferList = [];
+    res.status(200).send('All streams have been removed');
+});
 //push ffmpeg webm to httpserver
+//Sample command
+// ffmpeg -fflags nobuffer -flags low_delay -rtsp_transport tcp -i rtsp://10.70.39.46:8554/camera33 -c:v libvpx-vp9 -lossless 1 -tile-columns 4 -frame-parallel 1 -row-mt 1 -quality realtime -speed 8 -f webm -flush_packets 1 http://127.0.0.1:1111/send_webm/test.webm
 app.post('/send_webm/:name', function (req, res) {
     try {
         let file = req.params.name;
@@ -435,7 +464,7 @@ app.get('/webm_stream/:id/@@@*', function (req, res) {
                     let input = parts[1]
 
                     // let command = `-re -rtsp_transport tcp -i ${parts[0]} -c:v libx264 -q:v 15 -vf scale=-1:720 -nal-hrd cbr -movflags frag_keyframe+empty_moov+default_base_moof+dash+skip_trailer -f mp4 -`
-                    let command = `-fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''} -i ${input} -c:v libvpx-vp9 -vf scale=-1:720 -lossless 1 -row-mt 1 -quality realtime -speed 8 -f webm pipe:1`
+                    let command = `-fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''}-i ${input} -c:v libvpx-vp9 -vf scale=-1:720 -lossless 1 -row-mt 1 -quality realtime -speed 8 -f webm pipe:1`
                     // let command = `-fflags nobuffer -flags low_delay ${parts[1].startsWith('rtsp') ? isRTSP : ''} -i ${input} -c:v libvpx -crf 10 -b:v 1M -row-mt 1 -quality realtime -speed 8 -f webm pipe:1`
                     // let command = `ffmpeg -re -rtsp_transport tcp -i ${parts[0]} -c:v libtheora -q:v 15 -vf scale=-1:720 -f segment -segment_time 10 -segment_format ogg -movflags frag_keyframe -f ogg -`
                     console.log(command)
@@ -457,7 +486,7 @@ app.get('/webm_stream/:id/@@@*', function (req, res) {
                         res.end();
                     });
                     ffmpeg.stderr.on('data', (data) => {
-                        // console.error(`stderr: ${data}`);
+                        console.error(`stderr: ${data}`);
                     });
                     req.on('close', function () {
                         killProcess(ffmpeg.pid)
@@ -478,10 +507,11 @@ app.get('/webm_stream/:id/@@@*', function (req, res) {
 
 
 });
-app.get('/ivmsstream/closeall', function (req, res) {
+app.get('/webm_stream_direct/closeall', function (req, res) {
     global.streamList.forEach(stream => {
         killProcess(stream.stream.pid);
     });
+    global.streamList=[]
     res.status(200).send('All streams closed');
 });
 
@@ -941,7 +971,7 @@ function doesNoClientUseStream(streamLastUsedTime) {
     let currentTime = moment();
     streamLastUsedTime = streamLastUsedTime.add(15, 'minutes');
     console.log(currentTime, streamLastUsedTime)
-    let res = streamLastUsedTime.isBefore(currentTime);
+    let res = streamLastUsedTime.isAfter(currentTime);
     console.log('Stream has not passed ' + res)
     return res
 }
