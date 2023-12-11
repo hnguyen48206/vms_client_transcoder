@@ -47,10 +47,10 @@ if (global.mjpeg_bufferList == null) {
     global.mjpeg_bufferList = [];
 }
 
-// if (currentOS === 'win32')
-//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
-// else if (currentOS === 'linux')
-//     pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
+if (currentOS === 'win32')
+    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process.exe');
+else if (currentOS === 'linux')
+    pathToFfmpeg = path.join(process.cwd(), 'vms_transcoder_process');
 
 console.log(pathToFfmpeg)
 console.log(process.cwd())
@@ -70,7 +70,7 @@ const io = require('socket.io')(server, {
         callback(null, origins.includes(origin))
     }
 });
-server.listen(APP_PORT, "localhost", function (error) {
+server.listen(APP_PORT, "0.0.0.0", function (error) {
     if (error) {
         console.error("Unable to listen on port", APP_PORT, error);
         return;

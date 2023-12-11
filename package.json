@@ -7,7 +7,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon app.js",
-    "build": "pkg --compress GZip ."
+    "build64": "pkg --compress GZip .",
+    "build32": "pkg --compress GZip --targets win-x86 ."
   },
   "author": "",
   "license": "ISC",
